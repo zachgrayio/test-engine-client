@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/junit"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
@@ -72,7 +73,7 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	testResults, parseErr := loadAndParseJUnitXML(g.ResultPath)
+	testResults, parseErr := junit.Parse(g.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read gotestsum output, tests will not be retried: %v\n", parseErr)
 		// We don't want to fail the build if we fail to parse the report,
@@ -87,7 +88,7 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 			Name:   test.Name,
 			// This is the special thing about go test support.
 			Path: test.Classname,
-		}, test.Result)
+		}, junitStatusToTestStatus(test.Result))
 	}
 
 	// Return any command error after processing the report

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/junit"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
@@ -87,7 +88,7 @@ func (n NUnit) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 
 	cmdErr := runAndForwardSignal(cmd)
 
-	testResults, parseErr := loadAndParseJUnitXML(n.ResultPath)
+	testResults, parseErr := junit.Parse(n.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read NUnit output, tests will not be retried: %v\n", parseErr)
 		return cmdErr
@@ -98,7 +99,7 @@ func (n NUnit) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 			Scope: test.Classname,
 			Name:  test.Name,
 			Path:  test.Classname,
-		}, test.Result)
+		}, junitStatusToTestStatus(test.Result))
 	}
 
 	return cmdErr

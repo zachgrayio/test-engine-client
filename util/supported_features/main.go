@@ -49,6 +49,7 @@ func main() {
 		runner.NewGoTest(runnerConfig),
 		runner.NewCucumber(runnerConfig),
 		runner.NewNUnit(runnerConfig),
+		runner.NewBazel(runnerConfig),
 		custom,
 	}
 

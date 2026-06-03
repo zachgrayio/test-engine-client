@@ -14,6 +14,16 @@ type RunnerConfig struct {
 	TestFileExcludePattern string
 	TestFilePattern        string
 	uploadToken            string
+
+	// Bazel-specific configuration.
+	// BazelQuery is the query used to discover test targets (default "tests(//...)").
+	BazelQuery string
+	// BazelFlags is a shell-quoted string of extra flags passed to `bazel test`.
+	BazelFlags string
+	// BepPath overrides where the Build Event Protocol file is written/read.
+	// When empty, bktec writes to a temp file. When set to an existing file
+	// with no targets to run, the bazel runner ingests it without invoking bazel.
+	BepPath string
 }
 
 func (rc RunnerConfig) LocationPrefix() string {

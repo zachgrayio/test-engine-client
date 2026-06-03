@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/junit"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
@@ -93,7 +94,7 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	if strings.HasSuffix(r.ResultPath, ".xml") {
-		tests, parseErr := loadAndParseJUnitXML(r.ResultPath)
+		tests, parseErr := junit.Parse(r.ResultPath)
 		if parseErr != nil {
 			fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output: %v\n", parseErr)
 			return cmdErr
@@ -104,7 +105,7 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 				Scope:  test.Classname,
 				Name:   test.Name,
 				Path:   test.Classname,
-			}, test.Result)
+			}, junitStatusToTestStatus(test.Result))
 		}
 	} else {
 		tests, parseErr := parseTestEngineTestResult(r.ResultPath)

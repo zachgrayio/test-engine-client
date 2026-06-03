@@ -58,6 +58,12 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	}
 }
 
+func processBEP(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+
+	return command.ProcessBEP(ctx, &cfg)
+}
+
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)

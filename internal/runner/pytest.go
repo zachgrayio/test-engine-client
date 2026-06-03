@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/junit"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/kballard/go-shellquote"
 	"golang.org/x/mod/semver"
@@ -158,7 +159,7 @@ func (p Pytest) runParseJSON(result *RunResult) error {
 }
 
 func (p Pytest) runParseJUnit(result *RunResult) error {
-	tests, parseErr := loadAndParseJUnitXML(p.ResultPath)
+	tests, parseErr := junit.Parse(p.ResultPath)
 	if parseErr != nil {
 		return parseErr
 	}
@@ -171,7 +172,7 @@ func (p Pytest) runParseJUnit(result *RunResult) error {
 			Scope:      scope,
 			Name:       test.Name,
 			Path:       path,
-		}, test.Result)
+		}, junitStatusToTestStatus(test.Result))
 	}
 
 	return nil

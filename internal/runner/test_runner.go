@@ -18,3 +18,12 @@ type TestRunner interface {
 	// ResultFilePath returns the path to the runner's raw result file.
 	ResultFilePath() string
 }
+
+// TestFailureExitCoder is an optional interface a runner can implement to tell
+// bktec which process exit codes represent test failures (as opposed to build
+// or usage errors). When implemented, it is used to decide whether a non-zero
+// exit can be suppressed because only muted tests failed. Runners that don't
+// implement it fall back to treating exit code 1 as a test failure.
+type TestFailureExitCoder interface {
+	IsTestFailureExitCode(code int) bool
+}

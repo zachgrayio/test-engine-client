@@ -73,6 +73,20 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		}
 	}
 
+	// Honor the Buildkite Test Engine "skip" lifecycle state: for runners that
+	// can only skip at the target/file level (e.g. bazel), drop any whole unit
+	// that contains a skipped test. Skipped tests are grouped by scope, which
+	// for the bazel runner equals the target label (== the test's Path).
+	if testRunner.SupportedFeatures().Skip && len(testPlan.SkippedTests) > 0 {
+		deselected := deselectSkippedTargets(thisNodeTask, testPlan.SkippedTests)
+		if len(deselected) > 0 {
+			fmt.Println("+++ Buildkite Test Engine Client: Skipping quarantined targets")
+			for _, label := range deselected {
+				fmt.Printf("- %s\n", label)
+			}
+		}
+	}
+
 	// execute tests
 	var timeline []api.Timeline
 	runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
@@ -91,9 +105,17 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
 		// We can't definitively confirm the non-zero exit was caused by muted test failures,
 		// since runners like rspec or jest can exit with code 1 for non-test-failure reasons too.
-		// However, checking for exit code 1 alongside a passing report is a best-effort approximation
-		// to reduce the risk of incorrectly suppressing a real error.
-		if exitError.ExitCode() == 1 && runResult.OnlyMutedFailures() {
+		// However, checking for a test-failure exit code alongside a passing report is a
+		// best-effort approximation to reduce the risk of incorrectly suppressing a real error.
+		//
+		// Most runners signal test failures with exit code 1, but some use other codes
+		// (e.g. bazel uses 3 for "tests failed"). Runners can implement
+		// runner.TestFailureExitCoder to report which codes represent test failures.
+		isTestFailure := exitError.ExitCode() == 1
+		if tfc, ok := testRunner.(runner.TestFailureExitCoder); ok {
+			isTestFailure = tfc.IsTestFailureExitCode(exitError.ExitCode())
+		}
+		if isTestFailure && runResult.OnlyMutedFailures() {
 			return nil
 		}
 		return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
@@ -307,6 +329,38 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 	}
 
 	return *runResult, nil
+}
+
+// deselectSkippedTargets removes, in place, any of this node's tests whose unit
+// (Path) matches the scope of a skipped test. For the bazel runner the unit and
+// the scope are both the target label, so this drops whole quarantined targets
+// from the invocation. It returns the distinct labels that were deselected.
+func deselectSkippedTargets(task *plan.Task, skipped []plan.TestCase) []string {
+	skippedScopes := map[string]bool{}
+	for _, s := range skipped {
+		if s.Scope != "" {
+			skippedScopes[s.Scope] = true
+		}
+	}
+	if len(skippedScopes) == 0 {
+		return nil
+	}
+
+	kept := task.Tests[:0]
+	deselected := []string{}
+	deselectedSeen := map[string]bool{}
+	for _, test := range task.Tests {
+		if skippedScopes[test.Path] {
+			if !deselectedSeen[test.Path] {
+				deselected = append(deselected, test.Path)
+				deselectedSeen[test.Path] = true
+			}
+			continue
+		}
+		kept = append(kept, test)
+	}
+	task.Tests = kept
+	return deselected
 }
 
 func logSignalAndExit(name string, signal syscall.Signal) {

@@ -3,6 +3,7 @@ package runner
 import (
 	"testing"
 
+	"github.com/buildkite/test-engine-client/v2/internal/junit"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/google/go-cmp/cmp"
 )
@@ -142,17 +143,17 @@ func TestNUnit_CommandNameAndArgs(t *testing.T) {
 }
 
 func TestNUnit_ParseJUnitResults(t *testing.T) {
-	results, err := loadAndParseJUnitXML("./testdata/nunit/junit-results.xml")
+	results, err := junit.Parse("./testdata/nunit/junit-results.xml")
 	if err != nil {
-		t.Fatalf("loadAndParseJUnitXmlResult() error = %v", err)
+		t.Fatalf("junit.Parse() error = %v", err)
 	}
 
 	if len(results) != 5 {
-		t.Fatalf("loadAndParseJUnitXmlResult() len = %d, want 5", len(results))
+		t.Fatalf("junit.Parse() len = %d, want 5", len(results))
 	}
 
 	// Check passed test
-	if results[0].Name != "AddTwoNumbers" || results[0].Result != TestStatusPassed {
+	if results[0].Name != "AddTwoNumbers" || results[0].Result != junit.StatusPassed {
 		t.Errorf("results[0] = {Name: %q, Result: %q}, want {Name: \"AddTwoNumbers\", Result: \"passed\"}", results[0].Name, results[0].Result)
 	}
 	if results[0].Classname != "MyLib.Tests.CalculatorTests" {
@@ -160,12 +161,12 @@ func TestNUnit_ParseJUnitResults(t *testing.T) {
 	}
 
 	// Check failed test
-	if results[2].Name != "DivideByZero" || results[2].Result != TestStatusFailed {
+	if results[2].Name != "DivideByZero" || results[2].Result != junit.StatusFailed {
 		t.Errorf("results[2] = {Name: %q, Result: %q}, want {Name: \"DivideByZero\", Result: \"failed\"}", results[2].Name, results[2].Result)
 	}
 
 	// Check skipped test
-	if results[4].Name != "SkippedTest" || results[4].Result != TestStatusSkipped {
+	if results[4].Name != "SkippedTest" || results[4].Result != junit.StatusSkipped {
 		t.Errorf("results[4] = {Name: %q, Result: %q}, want {Name: \"SkippedTest\", Result: \"skipped\"}", results[4].Name, results[4].Result)
 	}
 }

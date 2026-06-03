@@ -18,6 +18,10 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
 		uploadToken:            cfg.UploadToken,
+
+		BazelQuery: cfg.BazelQuery,
+		BazelFlags: cfg.BazelFlags,
+		BepPath:    cfg.BepPath,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {
@@ -39,10 +43,12 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		return NewCucumber(runnerConfig), nil
 	case "nunit":
 		return NewNUnit(runnerConfig), nil
+	case "bazel":
+		return NewBazel(runnerConfig), nil
 	case "custom":
 		return NewCustom(runnerConfig)
 	default:
 		// Update the error message to include the new runner
-		return nil, fmt.Errorf("runner value %q is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', 'cucumber', 'nunit', or 'custom'", testRunner)
+		return nil, fmt.Errorf("runner value %q is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', 'cucumber', 'nunit', 'bazel', or 'custom'", testRunner)
 	}
 }

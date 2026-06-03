@@ -308,6 +308,30 @@ var resultPathFlag = &cli.StringFlag{
 	Destination: &cfg.ResultPath,
 }
 
+var bazelQueryFlag = &cli.StringFlag{
+	Name:        "bazel-query",
+	Category:    "TEST RUNNER",
+	Usage:       "Query used by the bazel runner to discover test targets (default \"tests(//...)\")",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BAZEL_QUERY"),
+	Destination: &cfg.BazelQuery,
+}
+
+var bazelFlagsFlag = &cli.StringFlag{
+	Name:        "bazel-flags",
+	Category:    "TEST RUNNER",
+	Usage:       "Extra flags passed to `bazel test` by the bazel runner (e.g. \"--config=ci --build_tests_only\")",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BAZEL_FLAGS"),
+	Destination: &cfg.BazelFlags,
+}
+
+var bepPathFlag = &cli.StringFlag{
+	Name:        "bep-path",
+	Category:    "TEST RUNNER",
+	Usage:       "Path where the bazel runner writes/reads the Build Event Protocol file. When set to an existing file with no targets to run, the BEP is ingested without invoking bazel.",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BEP_PATH"),
+	Destination: &cfg.BepPath,
+}
+
 var splitByExampleFlag = &cli.BoolFlag{
 	Name:        "split-by-example",
 	Category:    "TEST RUNNER",
@@ -531,6 +555,9 @@ var runnerEnvironmentFlags = []cli.Flag{
 	testFileExcludePatternFlag,
 	testRunnerFlag,
 	resultPathFlag,
+	bazelQueryFlag,
+	bazelFlagsFlag,
+	bepPathFlag,
 	splitByExampleFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags
@@ -566,6 +593,16 @@ func runCommandFlags() []cli.Flag {
 	flags = append(flags, failOnNoTestsFlag)
 	flags = append(flags, previewSelectionFlags()...)
 	return flags
+}
+
+func processBEPFlags() []cli.Flag {
+	return []cli.Flag{
+		bepPathFlag,
+		uploadTokenFlag,
+		uploadBaseURLFlag,
+		locationPrefixFlag,
+		buildkiteAgentCommandFlag,
+	}
 }
 
 func planCommandFlags() []cli.Flag {
@@ -614,6 +651,13 @@ var cliCommand = &cli.Command{
 					},
 				},
 			},
+		},
+		{
+			Name:                      "process-bep",
+			Usage:                     "Parse a Bazel BEP file and upload the test results to Test Engine (does not invoke bazel)",
+			Action:                    processBEP,
+			DisableSliceFlagSeparator: true,
+			Flags:                     processBEPFlags(),
 		},
 		{
 			Name:   "tools",
