@@ -12,6 +12,7 @@ import (
 
 	flagpb "github.com/bazel-contrib/bazelrc-parser-go/bazel_protos/bazel_flags"
 	"github.com/buildkite/test-engine-client/v2/internal/bep"
+	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"google.golang.org/protobuf/proto"
 )
@@ -132,6 +133,69 @@ func TestBazelCommandNameAndArgs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("args = %v, want %v", args, want)
+	}
+	for _, testCase := range []struct {
+		name       string
+		maxRetries int
+		retry      bool
+	}{
+		{name: "preserve Bazel attempts without client retries"},
+		{name: "client owns initial attempt", maxRetries: 2},
+		{name: "client owns retry attempts", maxRetries: 2, retry: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reader.Close()
+			defer writer.Close()
+			stderr := os.Stderr
+			os.Stderr = writer
+			t.Cleanup(func() { os.Stderr = stderr })
+			testRunner, err := DetectRunner(&config.Config{
+				TestRunner: "bazel",
+				BazelFlags: "--config=ci --flaky_test_attempts=5",
+				ResultPath: "/tmp/bep.pb",
+				MaxRetries: testCase.maxRetries,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, args, err := testRunner.CommandNameAndArgs(testCases, testCase.retry)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"test", "--config=ci", "--flaky_test_attempts=5", "--build_event_binary_file=/tmp/bep.pb"}
+			if testCase.maxRetries > 0 {
+				want = append(want, "--flaky_test_attempts=1")
+			}
+			want = append(want, "//foo:bar", "//baz:qux")
+			if !reflect.DeepEqual(args, want) {
+				t.Errorf("args = %v, want %v", args, want)
+			}
+			if _, _, err := testRunner.CommandNameAndArgs(testCases, !testCase.retry); err != nil {
+				t.Fatal(err)
+			}
+			os.Stderr = stderr
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			output, err := io.ReadAll(reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantWarnings := 0
+			if testCase.maxRetries > 0 {
+				wantWarnings = 1
+				if !strings.Contains(string(output), "overriding Bazel --flaky_test_attempts=1") {
+					t.Errorf("missing attempt override warning: %s", output)
+				}
+			}
+			if got := strings.Count(string(output), "Warning: bktec retries are enabled"); got != wantWarnings {
+				t.Errorf("got %d retry warnings, want %d: %s", got, wantWarnings, output)
+			}
+		})
 	}
 }
 

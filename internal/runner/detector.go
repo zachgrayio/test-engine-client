@@ -12,6 +12,7 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 
 		locationPrefix:         cfg.LocationPrefix,
 		ResultPath:             cfg.ResultPath,
+		MaxRetries:             cfg.MaxRetries,
 		RetryTestCommand:       cfg.RetryCommand,
 		TagFilters:             cfg.TagFilters,
 		TestCommand:            cfg.TestCommand,

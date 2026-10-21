@@ -8,6 +8,7 @@ type RunnerConfig struct {
 	// User typically don't need to worry about setting this except in in RSpec and playwright.
 	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
 	ResultPath             string
+	MaxRetries             int
 	RetryTestCommand       string
 	TagFilters             string
 	TestCommand            string

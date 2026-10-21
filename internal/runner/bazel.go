@@ -34,6 +34,9 @@ var _ TestRunner = (*Bazel)(nil)
 var _ TestFailureExitCoder = (*Bazel)(nil)
 
 func NewBazel(c RunnerConfig) Bazel {
+	if c.MaxRetries > 0 {
+		fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: Warning: bktec retries are enabled (%d retries); overriding Bazel --flaky_test_attempts=1 so only bktec retries failed tests\n", c.MaxRetries)
+	}
 	bepPath := c.ResultPath
 	if bepPath != "" && os.Getenv("BUILDKITE_TEST_ENGINE_RESULT_PATH") == bepPath {
 		fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: Warning: BUILDKITE_TEST_ENGINE_RESULT_PATH overrides Bazel's BEP destination with %q\n", bepPath)
@@ -255,6 +258,10 @@ func (b Bazel) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string
 
 	if !b.bepConfigured {
 		args = append(args, fmt.Sprintf("--build_event_binary_file=%s", b.bepPath))
+	}
+
+	if b.MaxRetries > 0 {
+		args = append(args, "--flaky_test_attempts=1")
 	}
 
 	args = append(args, labels...)
