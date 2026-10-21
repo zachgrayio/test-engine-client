@@ -130,6 +130,7 @@ func parseJSON(r io.Reader) ([]*bes.BuildEvent, error) {
 	return events, nil
 }
 
+//nolint:staticcheck // SA1019: preserve timing from legacy BEP millisecond fields.
 func aggregate(events []*bes.BuildEvent) []TargetResult {
 	byLabel := map[string]*TargetResult{}
 	order := []string{}

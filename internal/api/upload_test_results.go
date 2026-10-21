@@ -61,11 +61,11 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 	}
 	if len(result.Errors) > 0 {
 		details, _ := json.Marshal(result.Errors)
-		return fmt.Errorf("Test Engine reported upload errors: %s", details)
+		return fmt.Errorf("test engine reported upload errors: %s", details)
 	}
 	if result.Queued != nil {
 		if *result.Queued == 0 {
-			return fmt.Errorf("Test Engine accepted the upload but queued no test executions (skipped: %d)", result.Skipped)
+			return fmt.Errorf("test engine accepted the upload but queued no test executions (skipped: %d)", result.Skipped)
 		}
 		fmt.Printf("Buildkite Test Engine Client: Test Engine accepted upload (queued: %d, skipped: %d)\n", *result.Queued, result.Skipped)
 	}
