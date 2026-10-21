@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -45,6 +46,28 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		Queued  *int              `json:"queued"`
+		Skipped int               `json:"skipped"`
+		Errors  []json.RawMessage `json:"errors"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&result); err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return fmt.Errorf("decode upload response: %w", err)
+	}
+	if len(result.Errors) > 0 {
+		details, _ := json.Marshal(result.Errors)
+		return fmt.Errorf("Test Engine reported upload errors: %s", details)
+	}
+	if result.Queued != nil {
+		if *result.Queued == 0 {
+			return fmt.Errorf("Test Engine accepted the upload but queued no test executions (skipped: %d)", result.Skipped)
+		}
+		fmt.Printf("Buildkite Test Engine Client: Test Engine accepted upload (queued: %d, skipped: %d)\n", *result.Queued, result.Skipped)
 	}
 
 	return nil

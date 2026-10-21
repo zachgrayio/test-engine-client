@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -58,6 +59,35 @@ func TestUploadTestResults(t *testing.T) {
 	assert.Equal(t, "Token token=my-token", gotToken)
 	assert.Equal(t, "rspec-json", gotFormat)
 	assert.Equal(t, "./", gotLocationPrefix)
+}
+
+func TestUploadTestResults_IngestionResponse(t *testing.T) {
+	resultFile := filepath.Join(t.TempDir(), "results.json")
+	require.NoError(t, os.WriteFile(resultFile, []byte("[]"), 0o600))
+	for _, testCase := range []struct {
+		name      string
+		body      string
+		wantError string
+	}{
+		{name: "queued executions", body: `{"queued":2,"skipped":0,"errors":[]}`},
+		{name: "ingestion error with HTTP success", body: `{"queued":0,"skipped":2,"errors":["history.duration is required"]}`, wantError: "history.duration is required"},
+		{name: "no queued executions", body: `{"queued":0,"skipped":2,"errors":[]}`, wantError: "queued no test executions (skipped: 2)"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writer.WriteHeader(http.StatusAccepted)
+				_, _ = io.WriteString(writer, testCase.body)
+			}))
+			defer server.Close()
+			client := NewClient(ClientConfig{UploadBaseURL: server.URL})
+			err := client.UploadTestResults(t.Context(), "upload-token", resultFile, "json", "")
+			if testCase.wantError != "" {
+				require.ErrorContains(t, err, testCase.wantError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestUploadTestResults_ServerError(t *testing.T) {

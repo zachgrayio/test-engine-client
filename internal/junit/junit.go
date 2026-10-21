@@ -25,6 +25,7 @@ type TestCase struct {
 	Classname string
 	Name      string
 	Result    Status
+	Duration  float64
 }
 
 type xmlFailure struct {
@@ -34,6 +35,7 @@ type xmlFailure struct {
 type xmlTestCase struct {
 	Classname string      `xml:"classname,attr"`
 	Name      string      `xml:"name,attr"`
+	Time      float64     `xml:"time,attr"`
 	Failure   *xmlFailure `xml:"failure"`
 	Error     *xmlFailure `xml:"error"`
 	Skipped   *xmlFailure `xml:"skipped"`
@@ -85,6 +87,7 @@ func Parse(path string) ([]TestCase, error) {
 				Classname: tc.Classname,
 				Name:      tc.Name,
 				Result:    statusFor(tc),
+				Duration:  tc.Time,
 			})
 		}
 	}

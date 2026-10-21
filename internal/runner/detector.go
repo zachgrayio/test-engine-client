@@ -21,7 +21,6 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 
 		BazelQuery: cfg.BazelQuery,
 		BazelFlags: cfg.BazelFlags,
-		BepPath:    cfg.BepPath,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {

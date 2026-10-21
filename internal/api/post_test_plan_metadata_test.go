@@ -73,8 +73,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN": "",
 				"BUILDKITE_TEST_ENGINE_TEST_RUNNER": "",
 				"BUILDKITE_TEST_ENGINE_BAZEL_QUERY": "",
-				"BUILDKITE_TEST_ENGINE_BAZEL_FLAGS": "",
-				"BUILDKITE_TEST_ENGINE_BEP_PATH": ""
+								"BUILDKITE_TEST_ENGINE_BAZEL_FLAGS": ""
 			},
 			"timeline": [
 				{"event": "test_start", "timestamp": "2024-06-20T04:46:13.60977Z"},

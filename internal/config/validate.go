@@ -61,6 +61,7 @@ func (c *Config) validate() error {
 	}
 
 	runnersWithoutResultPath := map[string]bool{
+		"bazel":        true,
 		"cypress":      true,
 		"pytest":       true,
 		"pytest-pants": true,

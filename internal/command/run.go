@@ -226,6 +226,12 @@ func uploadResults(ctx context.Context, apiClient *api.Client, cfg *config.Confi
 	if _, err := os.Stat(testRunner.ResultFilePath()); err != nil {
 		return
 	}
+	if format == "bazel-bep" {
+		if err := uploadBEPResults(ctx, apiClient, testRunner.ResultFilePath(), cfg.UploadToken, testRunner.LocationPrefix()); err != nil {
+			fmt.Printf("Buildkite Test Engine Client: Failed to upload test results to Test Engine: %v\n", err)
+		}
+		return
+	}
 	fmt.Println("Buildkite Test Engine Client: Uploading test results to Test Engine")
 	if err := apiClient.UploadTestResults(ctx, cfg.UploadToken, testRunner.ResultFilePath(), format, testRunner.LocationPrefix()); err != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to upload test results to Test Engine: %v\n", err)

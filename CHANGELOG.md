@@ -1,4 +1,8 @@
 # Changelog
+## Unreleased
+- Upload Bazel BEP results through `bktec run --upload-results`, including failed attempts and retries. No collector plugin is required.
+- Use `--result-path` / `BUILDKITE_TEST_ENGINE_RESULT_PATH` for Bazel BEP files. Remove the redundant `--bep-path` option and environment variable.
+
 ## 2.7.0 - 2026-05-29
 - Upload test results to the Test Engine Upload API after each run, replacing the need to install `buildkite-test-collector` alongside `bktec`. Opt-in via `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS`; disabled by default to avoid double-uploading for customers already running the collector.
 - Change the Pytest runner default output to JUnit XML when `buildkite-test-collector` is not installed. When the plugin is present, the existing Test Engine JSON output and `--tag-filters` behaviour are unchanged. Using `--tag-filters` without the plugin now exits with a clear error.

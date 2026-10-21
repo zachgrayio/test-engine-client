@@ -26,7 +26,7 @@ bktec run
 3. For this node, `bktec` invokes:
 
    ```sh
-   bazel test <bazel-flags> --build_event_binary_file=<bep-path> //label-a //label-b ...
+  bazel test <bazel-flags> --build_event_binary_file=<result-path> //label-a //label-b ...
    ```
 
 4. `bktec` parses the BEP file, reads the JUnit `test.xml` outputs that BEP
@@ -84,11 +84,11 @@ the results; you don't need to add it.
 ## BEP file location
 
 By default `bktec` writes the BEP to a temporary file. Set
-`BUILDKITE_TEST_ENGINE_BEP_PATH` to control where it is written, for example so
+`BUILDKITE_TEST_ENGINE_RESULT_PATH` (or `--result-path`) to control where it is written, for example so
 another tool (such as a BEP annotation plugin) can read the same file:
 
 ```sh
-export BUILDKITE_TEST_ENGINE_BEP_PATH="$BUILDKITE_BUILD_PATH/bep/$BUILDKITE_JOB_ID/bep-0.pb"
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="$BUILDKITE_BUILD_PATH/bep/$BUILDKITE_JOB_ID/bep-0.pb"
 ```
 
 ## Test state management: mute vs. skip
@@ -123,10 +123,19 @@ export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
 
 ## Uploading results to Test Engine
 
-The `bazel` runner produces many `test.xml` files (one per target), so the
-single-file `--upload-results` path is not used. Upload results with the
-[test-collector plugin](https://github.com/buildkite-plugins/test-collector-buildkite-plugin)
-pointed at Bazel's `bazel-testlogs`, or at the BEP file.
+Set `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true` or pass `--upload-results` to
+`bktec run`. After each attempt, including failed attempts and retries, bktec
+reads the BEP and the JUnit XML files it references, then uploads Test Engine JSON
+with scope set to the Bazel target label. Targets without readable XML are
+reported using their target-level status. Upload failures are best-effort and
+do not change the test exit code.
+
+No collector plugin is needed. The tests Buildkite plugin enables uploads by
+default. Do not configure another collector for the same results.
+
+The existing `bktec process-bep --result-path results.pb` command can also upload
+an already-produced BEP file without invoking Bazel. It requires an upload token
+in `BUILDKITE_ANALYTICS_TOKEN` or `--upload-token`.
 
 ## Full Buildkite pipeline example
 
@@ -136,10 +145,14 @@ pointed at Bazel's `bazel-testlogs`, or at the BEP file.
     - bktec run
   env:
     BUILDKITE_TEST_ENGINE_SUITE_SLUG: your-suite-slug
-    BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-api-token # For state management
+    BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: "true"
     BUILDKITE_TEST_ENGINE_TEST_RUNNER: bazel
     BUILDKITE_TEST_ENGINE_BAZEL_FLAGS: "--config=ci --build_tests_only"
-    BUILDKITE_TEST_ENGINE_BEP_PATH: "$BUILDKITE_BUILD_PATH/bep/$BUILDKITE_JOB_ID/bep-0.pb"
+    BUILDKITE_TEST_ENGINE_RESULT_PATH: "$BUILDKITE_BUILD_PATH/bep/$BUILDKITE_JOB_ID/bep-0.pb"
     BUILDKITE_TEST_ENGINE_RETRY_COUNT: 1
   parallelism: 4 # This activates test splitting across targets
 ```
+
+On Buildkite, bktec requests a suite-scoped OIDC token automatically when API
+and upload tokens are not provided. The pipeline must be authorized to access
+the suite. Outside Buildkite, provide API and upload credentials explicitly.

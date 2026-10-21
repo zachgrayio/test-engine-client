@@ -178,6 +178,16 @@ func TestConfigValidate_IdentifierPresentBuildIdStepIdMissing(t *testing.T) {
 	}
 }
 
+func TestConfigValidate_ResultPathOptionalWithBazel(t *testing.T) {
+	c := createConfig()
+	c.ResultPath = ""
+	c.TestRunner = "bazel"
+
+	if err := c.validate(); err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
+}
+
 func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""

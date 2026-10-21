@@ -47,7 +47,9 @@ type TargetResult struct {
 	XMLPaths []string
 	// Cached is true when at least one test action for this target was served
 	// from cache (local or remote).
-	Cached bool
+	Cached   bool
+	StartAt  float64
+	Duration float64
 }
 
 // ParseFile reads a BEP file (binary or JSON) and returns the per-target test
@@ -149,6 +151,14 @@ func aggregate(events []*bes.BuildEvent) []TargetResult {
 				continue
 			}
 			t := get(label)
+			t.StartAt = float64(tr.GetTestAttemptStartMillisEpoch()) / 1000
+			if start := tr.GetTestAttemptStart(); start != nil {
+				t.StartAt = float64(start.GetSeconds()) + float64(start.GetNanos())/1e9
+			}
+			t.Duration = float64(tr.GetTestAttemptDurationMillis()) / 1000
+			if duration := tr.GetTestAttemptDuration(); duration != nil {
+				t.Duration = duration.AsDuration().Seconds()
+			}
 			for _, f := range tr.GetTestActionOutput() {
 				if !strings.HasSuffix(f.GetName(), ".xml") {
 					continue
@@ -171,7 +181,18 @@ func aggregate(events []*bes.BuildEvent) []TargetResult {
 			}
 			// TestSummary.overall_status is authoritative and accounts for
 			// flaky retries; it is emitted after the per-attempt TestResults.
-			get(label).Status = mapStatus(ts.GetOverallStatus())
+			target := get(label)
+			target.Status = mapStatus(ts.GetOverallStatus())
+			if start := ts.GetFirstStartTime(); start != nil {
+				target.StartAt = float64(start.GetSeconds()) + float64(start.GetNanos())/1e9
+			} else if ts.GetFirstStartTimeMillis() != 0 {
+				target.StartAt = float64(ts.GetFirstStartTimeMillis()) / 1000
+			}
+			if duration := ts.GetTotalRunDuration(); duration != nil {
+				target.Duration = duration.AsDuration().Seconds()
+			} else if ts.GetTotalRunDurationMillis() != 0 {
+				target.Duration = float64(ts.GetTotalRunDurationMillis()) / 1000
+			}
 		}
 	}
 

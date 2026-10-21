@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bazel-contrib/bazelrc-parser-go/bazelrc"
 	"github.com/buildkite/test-engine-client/v2/internal/bep"
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
 	"github.com/buildkite/test-engine-client/v2/internal/junit"
@@ -21,7 +22,9 @@ type Bazel struct {
 	RunnerConfig
 	// bepPath is the resolved path to the BEP file that bktec asks bazel to
 	// write and then parses. Stable across retries (overwritten each attempt).
-	bepPath string
+	bepPath       string
+	bepConfigured bool
+	bepError      error
 }
 
 // Compile-time check that Bazel implements TestRunner.
@@ -31,19 +34,153 @@ var _ TestRunner = (*Bazel)(nil)
 var _ TestFailureExitCoder = (*Bazel)(nil)
 
 func NewBazel(c RunnerConfig) Bazel {
-	bepPath := c.BepPath
+	bepPath := c.ResultPath
+	if bepPath != "" && os.Getenv("BUILDKITE_TEST_ENGINE_RESULT_PATH") == bepPath {
+		fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: Warning: BUILDKITE_TEST_ENGINE_RESULT_PATH overrides Bazel's BEP destination with %q\n", bepPath)
+	}
+	bepConfigured := false
+	var bepError error
+	if bepPath == "" {
+		flags, err := shellquote.Split(c.BazelFlags)
+		if err == nil {
+			bepPath, bepError = configuredBazelBEPPath(flags)
+			bepConfigured = bepPath != ""
+		} else {
+			bepError = err
+		}
+	}
 	if bepPath == "" {
 		bepPath = filepath.Join(os.TempDir(), fmt.Sprintf("bktec-bep-%d.pb", os.Getpid()))
 	}
 
 	return Bazel{
-		RunnerConfig: c,
-		bepPath:      bepPath,
+		RunnerConfig:  c,
+		bepPath:       bepPath,
+		bepConfigured: bepConfigured,
+		bepError:      bepError,
 	}
+}
+
+func configuredBazelBEPPath(flags []string) (string, error) {
+	if path := bazelBEPPath(flags); path != "" {
+		return path, nil
+	}
+	workspace, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for directory := workspace; ; directory = filepath.Dir(directory) {
+		found := false
+		for _, marker := range []string{"MODULE.bazel", "WORKSPACE.bazel", "WORKSPACE"} {
+			if _, err := os.Stat(filepath.Join(directory, marker)); err == nil {
+				workspace = directory
+				found = true
+				break
+			}
+		}
+		if found || filepath.Dir(directory) == directory {
+			break
+		}
+	}
+	rcFiles := []string{"/etc/bazel.bazelrc", filepath.Join(workspace, ".bazelrc")}
+	if home, err := os.UserHomeDir(); err == nil {
+		rcFiles = append(rcFiles, filepath.Join(home, ".bazelrc"))
+	}
+	var imports strings.Builder
+	hasRCFile := false
+	for _, path := range rcFiles {
+		if _, err := os.Stat(path); err == nil {
+			hasRCFile = true
+		}
+		imports.WriteString(shellquote.Join("try-import", path))
+		imports.WriteByte('\n')
+	}
+	if !hasRCFile {
+		return "", nil
+	}
+	flagData, err := bazelrc.GetFlagDataFromBazel(exec.Command("bazel"))
+	if err != nil {
+		return "", fmt.Errorf("read Bazel flag metadata: %w", err)
+	}
+	contents, err := bazelrc.NewBazelRcParser(workspace, flagData).Parsefile(strings.NewReader(imports.String()), ".bazelrc")
+	if err != nil {
+		return "", fmt.Errorf("resolve Bazel BEP configuration: %w", err)
+	}
+	var path string
+	active := make(map[string]bool)
+	var apply func(string) error
+	apply = func(config string) error {
+		if active[config] {
+			return fmt.Errorf("Bazel config cycle involving %q", config)
+		}
+		active[config] = true
+		defer delete(active, config)
+		for _, command := range []string{"common", "build", "test"} {
+			if config != "" {
+				command += ":" + config
+			}
+			if value := contents.FlagValue(command, "build_event_binary_file"); value != nil {
+				path = *value
+			}
+			if nested := contents.FlagValue(command, "config"); nested != nil {
+				if err := apply(*nested); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := apply(""); err != nil {
+		return "", err
+	}
+	for index := 0; index < len(flags); index++ {
+		flag := flags[index]
+		if flag == "--" {
+			break
+		}
+		var config string
+		if strings.HasPrefix(flag, "--config=") {
+			config = strings.TrimPrefix(flag, "--config=")
+		} else if flag == "--config" && index+1 < len(flags) {
+			index++
+			config = flags[index]
+		} else {
+			continue
+		}
+		if err := apply(config); err != nil {
+			return "", err
+		}
+	}
+	return path, nil
+}
+
+func bazelBEPPath(flags []string) string {
+	var path string
+	for index := 0; index < len(flags); index++ {
+		flag := flags[index]
+		if flag == "--" {
+			break
+		}
+		if strings.HasPrefix(flag, "--build_event_binary_file=") {
+			path = strings.TrimPrefix(flag, "--build_event_binary_file=")
+		} else if flag == "--build_event_binary_file" && index+1 < len(flags) {
+			index++
+			path = flags[index]
+		}
+	}
+	return path
 }
 
 func (b Bazel) Name() string {
 	return "bazel"
+}
+
+func (b Bazel) ResultFormat() string {
+	return "bazel-bep"
+}
+
+func (b Bazel) ResultFilePath() string {
+	return b.bepPath
 }
 
 func (b Bazel) SupportedFeatures() SupportedFeatures {
@@ -67,6 +204,9 @@ func (b Bazel) GetExamples(files []string) ([]plan.TestCase, error) {
 // target label. The pipeline can bypass this by passing a target list via
 // --files.
 func (b Bazel) GetFiles() ([]string, error) {
+	if b.bepError != nil {
+		return nil, b.bepError
+	}
 	query := b.BazelQuery
 	if query == "" {
 		query = "tests(//...)"
@@ -98,6 +238,9 @@ func (b Bazel) GetFiles() ([]string, error) {
 }
 
 func (b Bazel) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
+	if b.bepError != nil {
+		return "", nil, b.bepError
+	}
 	labels := b.getLabels(testCases)
 
 	args := []string{"test"}
@@ -110,9 +253,9 @@ func (b Bazel) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string
 		args = append(args, flags...)
 	}
 
-	// bktec owns the BEP file so it can parse the results. Appended last so it
-	// wins over anything a user may have set in BazelFlags.
-	args = append(args, fmt.Sprintf("--build_event_binary_file=%s", b.bepPath))
+	if !b.bepConfigured {
+		args = append(args, fmt.Sprintf("--build_event_binary_file=%s", b.bepPath))
+	}
 
 	args = append(args, labels...)
 

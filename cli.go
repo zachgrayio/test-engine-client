@@ -303,7 +303,7 @@ var testRunnerFlag = &cli.StringFlag{
 var resultPathFlag = &cli.StringFlag{
 	Name:        "result-path",
 	Category:    "TEST RUNNER",
-	Usage:       "Path to the output file for the test runner",
+	Usage:       "Path to the output file for the test runner (for bazel, the BEP file)",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_RESULT_PATH"),
 	Destination: &cfg.ResultPath,
 }
@@ -322,14 +322,6 @@ var bazelFlagsFlag = &cli.StringFlag{
 	Usage:       "Extra flags passed to `bazel test` by the bazel runner (e.g. \"--config=ci --build_tests_only\")",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BAZEL_FLAGS"),
 	Destination: &cfg.BazelFlags,
-}
-
-var bepPathFlag = &cli.StringFlag{
-	Name:        "bep-path",
-	Category:    "TEST RUNNER",
-	Usage:       "Path where the bazel runner writes/reads the Build Event Protocol file. When set to an existing file with no targets to run, the BEP is ingested without invoking bazel.",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BEP_PATH"),
-	Destination: &cfg.BepPath,
 }
 
 var splitByExampleFlag = &cli.BoolFlag{
@@ -557,7 +549,6 @@ var runnerEnvironmentFlags = []cli.Flag{
 	resultPathFlag,
 	bazelQueryFlag,
 	bazelFlagsFlag,
-	bepPathFlag,
 	splitByExampleFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags
@@ -597,7 +588,7 @@ func runCommandFlags() []cli.Flag {
 
 func processBEPFlags() []cli.Flag {
 	return []cli.Flag{
-		bepPathFlag,
+		resultPathFlag,
 		uploadTokenFlag,
 		uploadBaseURLFlag,
 		locationPrefixFlag,

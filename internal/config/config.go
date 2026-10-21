@@ -96,11 +96,6 @@ type Config struct {
 	// BazelFlags is a shell-quoted string of extra flags passed to `bazel test`
 	// by the bazel runner (e.g. "--config=ci --build_tests_only").
 	BazelFlags string `json:"BUILDKITE_TEST_ENGINE_BAZEL_FLAGS"`
-	// BepPath overrides where the bazel runner writes/reads the Build Event
-	// Protocol file. When set to an existing file and no targets need to run,
-	// the bazel runner ingests it without invoking bazel.
-	BepPath string `json:"BUILDKITE_TEST_ENGINE_BEP_PATH"`
-
 	// Set to true if AccessToken was unset and an OIDC token was generated instead
 	accessTokenIsOIDC bool
 	// errs is a map of environment variables name and the validation errors associated with them.

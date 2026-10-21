@@ -24,23 +24,30 @@ type testEngineUploadResult struct {
 }
 
 type testEngineHistory struct {
-	Section string `json:"section"`
+	StartAt  float64 `json:"start_at"`
+	Duration float64 `json:"duration"`
 }
 
 // ProcessBEP parses a Bazel BEP file, derives per-case Test Engine results
 // (scope = target label, name = JUnit testcase) and uploads them to the Test
 // Engine analytics API. It does NOT invoke bazel; it only ingests an
-// already-produced BEP file. This is the analytics-only path used by the
-// test-collector plugin's bazel-bep mode.
+// already-produced BEP file.
 func ProcessBEP(ctx context.Context, cfg *config.Config) error {
-	if cfg.BepPath == "" {
-		return fmt.Errorf("a BEP file path is required (set BUILDKITE_TEST_ENGINE_BEP_PATH or --bep-path)")
+	if cfg.ResultPath == "" {
+		return fmt.Errorf("a BEP file path is required (set BUILDKITE_TEST_ENGINE_RESULT_PATH or --result-path)")
 	}
 	if cfg.UploadToken == "" {
 		return fmt.Errorf("an upload token is required (set BUILDKITE_ANALYTICS_TOKEN)")
 	}
 
-	targets, err := bep.ParseFile(cfg.BepPath)
+	apiClient := api.NewClient(api.ClientConfig{
+		UploadBaseURL: cfg.UploadBaseURL,
+	})
+	return uploadBEPResults(ctx, apiClient, cfg.ResultPath, cfg.UploadToken, cfg.LocationPrefix)
+}
+
+func uploadBEPResults(ctx context.Context, apiClient *api.Client, bepPath, token, locationPrefix string) error {
+	targets, err := bep.ParseFile(bepPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse BEP file: %w", err)
 	}
@@ -65,12 +72,8 @@ func ProcessBEP(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to close temp results file: %w", err)
 	}
 
-	apiClient := api.NewClient(api.ClientConfig{
-		UploadBaseURL: cfg.UploadBaseURL,
-	})
-
 	fmt.Printf("Buildkite Test Engine Client: Uploading %d Bazel test results to Test Engine\n", len(results))
-	if err := apiClient.UploadTestResults(ctx, cfg.UploadToken, tmp.Name(), "json", cfg.LocationPrefix); err != nil {
+	if err := apiClient.UploadTestResults(ctx, token, tmp.Name(), "json", locationPrefix); err != nil {
 		return fmt.Errorf("failed to upload test results: %w", err)
 	}
 
@@ -93,7 +96,7 @@ func bepTargetsToUploadResults(targets []bep.TargetResult) []testEngineUploadRes
 					Scope:   target.Label,
 					Name:    tc.Name,
 					Result:  string(tc.Result),
-					History: testEngineHistory{Section: "test"},
+					History: testEngineHistory{StartAt: target.StartAt, Duration: tc.Duration},
 				})
 				recorded = true
 			}
@@ -106,7 +109,7 @@ func bepTargetsToUploadResults(targets []bep.TargetResult) []testEngineUploadRes
 				Scope:   target.Label,
 				Name:    target.Label,
 				Result:  bepStatusToResultString(target.Status),
-				History: testEngineHistory{Section: "test"},
+				History: testEngineHistory{StartAt: target.StartAt, Duration: target.Duration},
 			})
 		}
 	}
